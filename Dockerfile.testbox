@@ -1,0 +1,34 @@
+FROM debian:bookworm
+
+RUN apt update && apt install -y \
+    openssh-server \
+    sudo \
+    nano \
+    && mkdir /var/run/sshd
+
+# Create local froxlor user
+RUN useradd -m -s /bin/bash frxlocal
+RUN echo 'frxlocal:frxlocal' | chpasswd
+RUN echo 'frxlocal ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Setup ssh key
+RUN mkdir -p /home/frxlocal/.ssh \
+    && chmod 700 /home/frxlocal/.ssh
+
+# Setup public key
+RUN echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBchkMcbwTD6KTHJcICwfN8qS0JlDGcyyDCLP4VBPr27 frxlocal@api" > /home/frxlocal/.ssh/authorized_keys \
+    && chmod 600 /home/frxlocal/.ssh/authorized_keys \
+    && chown -R frxlocal:frxlocal /home/frxlocal/.ssh
+
+# Disable root login and permit only key auth
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+# Environments base directory
+RUN mkdir -p /srv/environments
+
+# Expose ports
+EXPOSE 22
+
+# Default command to run ssh server
+CMD ["/usr/sbin/sshd", "-D"]

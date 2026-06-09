@@ -1,0 +1,6 @@
+/.idea
+/database
+/redis
+.env
+docker-compose.yml
+froxlor.env
