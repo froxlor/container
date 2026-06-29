@@ -1,6 +1,7 @@
 # Developer Guide
 
-This guide describes how to set up a local development environment for the froxlor container and how to mount additional packages during development.
+This guide describes how to set up a local development environment for the froxlor container and how to mount 
+additional packages during development.
 
 ## Directory Structure
 
@@ -71,7 +72,7 @@ services:
             timeout: 5s
             retries: 5
         volumes:
-            - ./database:/var/lib/mysql
+            - database:/var/lib/mysql
     redis:
         image: redis:latest
         restart: unless-stopped
@@ -82,7 +83,7 @@ services:
             timeout: 5s
             retries: 5
         volumes:
-            - ./redis:/data
+            - redis:/data
     adminer:
         image: adminer:latest
         restart: unless-stopped
@@ -90,10 +91,14 @@ services:
             - "8080:8080"
         depends_on:
             - db
+volumes:
+    database:
+    redis:
 ```
 
 > [!WARNING]
-> This development setup runs the froxlor container in privileged mode and uses the host PID namespace. Use this configuration only in trusted local development environments.
+> This development setup runs the froxlor container in privileged mode and uses the host PID namespace. Use this 
+> configuration only in trusted local development environments.
 
 ## Start the Development Environment
 
@@ -132,4 +137,26 @@ services:
       - ../froxlor:/var/www/html/froxlor
       - ../framework:/opt/froxlor/packages/framework
       - ../example-package:/opt/froxlor/packages/example-package
+```
+
+## Helpful Commands
+
+Here you'll find a list of helpful commands that you might need to use sometimes because of certain edge cases.
+
+### Database migration and seeding
+
+If you mount the source code without an existing database, startup may fail because database initialization will not 
+run when the source code is present. To migrate and seed the database, run the following command:
+
+```shell
+docker compose run froxlor php artisan migrate:fresh --seed
+```
+
+### Usage of Composer
+
+Sometimes you may wish to use Composer without using froxlor's package management. This can easily be done with the
+following command:
+
+```shell
+docker compose run froxlor composer <...>
 ```
