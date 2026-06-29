@@ -27,55 +27,69 @@ The following `docker-compose.yml` example can be used for local development.
 
 ```yaml
 services:
-  froxlor:
-    image: hub.froxlor.io/froxlor/froxlor:latest
-    build: docs
-    restart: unless-stopped
-    privileged: true
-    pid: "host"
-    depends_on:
-      - node
-      - db
-      - redis
-      - adminer
-    ports:
-      - "8000:8000"
-    env_file:
-      - ../froxlor/.env
-    volumes:
-      - ../froxlor:/var/www/html/froxlor
-      - ../framework:/opt/froxlor/packages/framework
-  node:
-    build:
-      dockerfile: Dockerfile.testbox
-  db:
-    image: mariadb:latest
-    restart: unless-stopped
-    environment:
-      MARIADB_ROOT_PASSWORD: CHANGEM3
-      MARIADB_DATABASE: froxlor
-      MARIADB_USER: froxlor
-      MARIADB_PASSWORD: CHANGEM3
-    healthcheck:
-      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
-      start_period: 30s
-      interval: 10s
-      timeout: 5s
-      retries: 20
-    volumes:
-      - ./database:/var/lib/mysql
-  redis:
-    image: redis:latest
-    restart: unless-stopped
-    volumes:
-      - ./redis:/data
-  adminer:
-    image: adminer:latest
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db
+    froxlor:
+        image: hub.froxlor.io/froxlor/froxlor:latest
+        build: .
+        restart: unless-stopped
+        privileged: true
+        pid: "host"
+        depends_on:
+            db:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            adminer:
+                condition: service_started
+        ports:
+            - "8000:8000"
+        # Use the environment and/or the env_file as you like
+        environment:
+            FROXLOR_DB_CONNECTION: mariadb
+            FROXLOR_DB_HOST: db
+            FROXLOR_DB_PORT: 3306
+            FROXLOR_DB_DATABASE: froxlor
+            FROXLOR_DB_USERNAME: froxlor
+            FROXLOR_DB_PASSWORD: CHANGEM3
+        env_file:
+            -   path: ../froxlor/.env
+                required: false
+        volumes:
+            - ../froxlor:/var/www/html/froxlor
+            - ../framework:/opt/froxlor/packages/framework
+    db:
+        image: mariadb:latest
+        restart: unless-stopped
+        environment:
+            MARIADB_ROOT_PASSWORD: CHANGEM3
+            MARIADB_DATABASE: froxlor
+            MARIADB_USER: froxlor
+            MARIADB_PASSWORD: CHANGEM3
+        healthcheck:
+            test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+            start_period: 30s
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        volumes:
+            - ./database:/var/lib/mysql
+    redis:
+        image: redis:latest
+        restart: unless-stopped
+        healthcheck:
+            test: [ "CMD", "redis-cli", "ping" ]
+            start_period: 5s
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        volumes:
+            - ./redis:/data
+    adminer:
+        image: adminer:latest
+        restart: unless-stopped
+        ports:
+            - "8080:8080"
+        depends_on:
+            - db
 ```
 
 > [!WARNING]

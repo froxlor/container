@@ -36,13 +36,13 @@ Create a `docker-compose.yml` file:
 
 ```yaml
 services:
-  froxlor:
-    image: hub.froxlor.io/froxlor/froxlor:latest
-    restart: unless-stopped
-    privileged: true
-    pid: "host"
-    ports:
-      - "8000:8000"
+    froxlor:
+        image: hub.froxlor.io/froxlor/froxlor:latest
+        restart: unless-stopped
+        privileged: true
+        pid: "host"
+        ports:
+            - "8000:8000"
 ```
 
 Start the container:
@@ -63,25 +63,24 @@ The following example includes environment variables and a persistent volume.
 
 ```yaml
 services:
-  froxlor:
-    image: hub.froxlor.io/froxlor/froxlor:latest
-    restart: unless-stopped
-    privileged: true
-    pid: "host"
-    environment:
-      FROXLOR_DB_CONNECTION: mariadb
-      FROXLOR_DB_HOST: db
-      FROXLOR_DB_PORT: 3306
-      FROXLOR_DB_DATABASE: froxlor
-      FROXLOR_DB_USERNAME: froxlor
-      FROXLOR_DB_PASSWORD: CHANGEM3
-    ports:
-      - "8000:8000"
-    volumes:
-      - froxlor:/var/www/html/froxlor
-
+    froxlor:
+        image: hub.froxlor.io/froxlor/froxlor:latest
+        restart: unless-stopped
+        privileged: true
+        pid: "host"
+        environment:
+            FROXLOR_DB_CONNECTION: mariadb
+            FROXLOR_DB_HOST: db
+            FROXLOR_DB_PORT: 3306
+            FROXLOR_DB_DATABASE: froxlor
+            FROXLOR_DB_USERNAME: froxlor
+            FROXLOR_DB_PASSWORD: CHANGEM3
+        ports:
+            - "8000:8000"
+        volumes:
+            - froxlor:/var/www/html/froxlor
 volumes:
-  froxlor:
+    froxlor:
 ```
 
 > [!WARNING]

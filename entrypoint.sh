@@ -7,7 +7,7 @@ APP_DIR="${APP_DIR:-/var/www/html/froxlor}"
 # Bootstrap froxlor if the project does not exist yet
 if [ ! -f "$APP_DIR/composer.json" ]; then
     echo "Bootstrapping froxlor, please be patient..."
-    composer create-project --no-interaction --quiet froxlor/froxlor:dev-develop "$APP_DIR"
+    composer create-project --no-interaction --quiet froxlor/froxlor:dev-main "$APP_DIR"
     echo "Bootstrap completed."
 else
     echo "Existing froxlor found, skip initialization."
