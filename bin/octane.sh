@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # SPDX-FileCopyrightText: 2026 the froxlor Team (see AUTHORS)
 # SPDX-License-Identifier: LGPL-3.0-or-later WITH LicenseRef-froxlor-Extension-Package-Exception
 #
@@ -19,27 +19,14 @@
 # License along with this library. If not, see
 # <https://www.gnu.org/licenses/>.
 
-set -e
-
-APP_DIR="${APP_DIR:-/var/www/html/froxlor}"
-
-# Bootstrap froxlor if the project does not exist yet
-if [ ! -f "$APP_DIR/composer.json" ]; then
-    echo "Bootstrapping froxlor, please be patient..."
-    composer create-project --no-interaction --quiet froxlor/froxlor:dev-main "$APP_DIR"
-    echo "Bootstrap completed."
-else
-    echo "Existing froxlor found, skip initialization."
+# Starts Octane (Swoole) for supervisord. A server of a crashed earlier start still holds the port
+# and Octane's state file: it is asked to stop, then killed with its workers.
+if pgrep -f "[s]woole_http_server: master process" > /dev/null; then
+    pkill -TERM -f "[s]woole_http_server: master process"
+    for _ in 1 2 3 4 5; do
+        pgrep -f "[s]woole_http_server" > /dev/null || break
+        sleep 1
+    done
+    pkill -KILL -f "[s]woole_http_server" || true
 fi
-
-# Change dir to app directory
-cd "$APP_DIR"
-
-# Include stunnel for SSL termination
-source /opt/froxlor/bin/stunnel.sh
-
-# Update .env to reflect the docker environment variables
-source /opt/froxlor/bin/env.sh
-
-# Execute the command passed to the container
-exec "$@"
+exec php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000

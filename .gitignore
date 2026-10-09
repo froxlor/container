@@ -3,5 +3,5 @@
 /froxlor
 /redis
 .env
-docker-compose.yml
+compose.yml
 froxlor.env

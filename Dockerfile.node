@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: 2026 the froxlor Team (see AUTHORS)
+# SPDX-License-Identifier: LGPL-3.0-or-later WITH LicenseRef-froxlor-Extension-Package-Exception
+#
+# This file is part of the froxlor project.
+#
+# This library is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version, with the froxlor
+# Extension Package Exception (see LICENSE-EXCEPTION).
+#
+# This library is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library. If not, see
+# <https://www.gnu.org/licenses/>.
+
+# Test node for development: Debian 13 (or Ubuntu 26.04 with BASE=ubuntu:26.04) with systemd and SSH,
+# managed by froxlor through the remote adapter (user frxlocal, key pair in
+# core/database/seeders/NodesTableSeeder.php). Not for production: the key is public.
+ARG BASE=debian:trixie
+FROM ${BASE}
+
+ENV container=docker
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    systemd \
+    systemd-sysv \
+    dbus \
+    openssh-server \
+    sudo \
+    ca-certificates \
+    nano \
+    && rm -rf /var/lib/apt/lists/* \
+    && systemctl enable ssh \
+    # units that make no sense in a container
+    && systemctl mask getty@tty1.service systemd-logind.service systemd-udevd.service systemd-udev-trigger.service \
+        systemd-modules-load.service proc-sys-fs-binfmt_misc.automount sys-kernel-config.mount sys-kernel-debug.mount sys-kernel-tracing.mount
+
+# Create local froxlor user
+RUN useradd -m -s /bin/bash frxlocal
+RUN echo 'frxlocal:frxlocal' | chpasswd
+RUN echo 'frxlocal ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Setup ssh key
+RUN mkdir -p /home/frxlocal/.ssh \
+    && chmod 700 /home/frxlocal/.ssh
+
+# Setup public key
+RUN echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBchkMcbwTD6KTHJcICwfN8qS0JlDGcyyDCLP4VBPr27 frxlocal@api" > /home/frxlocal/.ssh/authorized_keys \
+    && chmod 600 /home/frxlocal/.ssh/authorized_keys \
+    && chown -R frxlocal:frxlocal /home/frxlocal/.ssh
+
+# Disable root login and permit only key auth
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+# Environments base directory
+RUN mkdir -p /srv/environments
+
+# Expose ports
+EXPOSE 22
+
+STOPSIGNAL SIGRTMIN+3
+
+# systemd as PID 1, so froxlor can install and start services (node setup)
+CMD ["/sbin/init"]
