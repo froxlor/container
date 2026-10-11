@@ -1,12 +1,11 @@
 <p align="center">
     <a href="https://froxlor.org" target="_blank">
-        <img src="https://raw.githubusercontent.com/froxlor/ui/refs/heads/main/resources/img/icon.png" width="80" alt="froxlor logo">
+        <img src="https://froxlor.org/img/brand/logo_gradient_text_white.png" width="80" alt="froxlor logo">
     </a>
 </p>
 
 <p align="center">
     <a href="https://github.com/froxlor/container/actions/workflows/build-and-push.yml"><img src="https://github.com/froxlor/container/actions/workflows/build-and-push.yml/badge.svg" alt="Container build status"></a>
-    <a href="https://github.com/froxlor/framework/actions/workflows/run-unit-tests.yml"><img src="https://github.com/froxlor/framework/actions/workflows/run-unit-tests.yml/badge.svg" alt="Framework unit test status"></a>
     <a href="https://github.com/froxlor/container"><img src="https://img.shields.io/badge/container%20version-develop-orange" alt="Container version"></a>
     <a href="https://github.com/froxlor/container"><img src="https://img.shields.io/badge/froxlor%20version-develop-orange" alt="froxlor version"></a>
     <a href="https://github.com/froxlor/container"><img src="https://img.shields.io/badge/status-in%20development-orange" alt="Project status"></a>
@@ -21,7 +20,7 @@ This repository provides the official froxlor container image for Docker, Kubern
 > This container image is currently in development and is **not yet recommended for production use**.
 > It contains the latest development version of froxlor.
 >
-> If you want to install froxlor directly on a bare-metal or virtual server, use the main [froxlor repository](https://github.com/froxlor/froxlor).
+> If you want to install froxlor directly on a bare-metal or virtual server, without a container platform, use the main [froxlor repository](https://github.com/froxlor/froxlor).
 
 ## Quick Start
 
@@ -30,7 +29,29 @@ The following example starts a minimal froxlor container using Docker Compose.
 > [!TIP]
 > Check the [developer guide](DEVELOPERS.md) for information on setting up a development environment.
 
-### Minimal `compose.yml`
+### Single Node Installation
+
+Start by creating a fresh `froxlor` directory for your configuration files.
+
+```bash
+mkdir froxlor
+cd froxlor
+```
+
+```bash
+wget https://raw.githubusercontent.com/froxlor/froxlor/refs/heads/main/.env.example -O .env
+```
+
+Setup `DB_*` environment variables to match with the `compose.yml` `db` service. Example:
+
+```dotenv
+DB_CONNECTION=mariadb
+DB_HOST=db
+DB_PORT=3306
+DB_DATABASE=froxlor
+DB_USERNAME=froxlor
+DB_PASSWORD=CHANGEM3
+```
 
 Create a `compose.yml` file:
 
@@ -39,10 +60,39 @@ services:
     froxlor:
         image: hub.froxlor.io/froxlor/froxlor:latest
         restart: unless-stopped
+        # options grant the container elevated host access
+        # and is required to use the host as local node
         privileged: true
         pid: "host"
+        # Use the environment and/or the env_file as you like
+        environment:
+            FROXLOR_OCTANE_HTTPS: true
+        env_file: .env
+        # These ports are used for the froxlor ui
         ports:
-            - "8000:8000"
+            - "8000:8000" # HTTP
+            - "8443:8443" # HTTPS
+        volumes:
+            - froxlor:/var/www/html/froxlor
+    db:
+        image: mariadb:latest
+        restart: unless-stopped
+        environment:
+            MARIADB_ROOT_PASSWORD: CHANGEM3
+            MARIADB_DATABASE: froxlor
+            MARIADB_USER: froxlor
+            MARIADB_PASSWORD: CHANGEM3
+        healthcheck:
+            test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+            start_period: 30s
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        volumes:
+            - database:/var/lib/mysql
+volumes:
+    froxlor:
+    database:
 ```
 
 Start the container:
@@ -54,38 +104,8 @@ docker compose up -d
 Open froxlor in your browser:
 
 ```text
-http://localhost:8000
+https://<your-server-ip>:8443
 ```
-
-## Extended Docker Compose Example
-
-The following example includes environment variables and a persistent volume.
-
-```yaml
-services:
-    froxlor:
-        image: hub.froxlor.io/froxlor/froxlor:latest
-        restart: unless-stopped
-        privileged: true
-        pid: "host"
-        environment:
-            FROXLOR_DB_CONNECTION: mariadb
-            FROXLOR_DB_HOST: db
-            FROXLOR_DB_PORT: 3306
-            FROXLOR_DB_DATABASE: froxlor
-            FROXLOR_DB_USERNAME: froxlor
-            FROXLOR_DB_PASSWORD: CHANGEM3
-        ports:
-            - "8000:8000"
-        volumes:
-            - froxlor:/var/www/html/froxlor
-volumes:
-    froxlor:
-```
-
-> [!WARNING]
-> The extended example uses `privileged: true` and `pid: "host"`.
-> These options grant the container elevated host access and is required to use the host as local node.
 
 ## Database Privileges
 
