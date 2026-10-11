@@ -26,7 +26,7 @@ APP_DIR="${APP_DIR:-/var/www/html/froxlor}"
 # Bootstrap froxlor if the project does not exist yet
 if [ ! -f "$APP_DIR/composer.json" ]; then
     echo "Bootstrapping froxlor, please be patient..."
-    composer create-project --no-interaction --quiet froxlor/froxlor:dev-main "$APP_DIR"
+    COMPOSER=composer.json composer create-project --no-interaction --quiet froxlor/froxlor:dev-main "$APP_DIR"
     echo "Bootstrap completed."
 else
     echo "Existing froxlor found, skip initialization."
@@ -34,6 +34,16 @@ fi
 
 # Change dir to app directory
 cd "$APP_DIR"
+
+# composer (COMPOSER, see Dockerfile) and the package management work on composer.local.json, so
+# composer.json stays as the skeleton ships it; the package management keeps it in sync afterwards
+if [ ! -f composer.local.json ]; then
+    if [ -f vendor/froxlor/packages/src/Support/LocalComposerFile.php ]; then
+        php -r 'require "vendor/autoload.php"; (new Froxlor\Packages\Support\LocalComposerFile(getcwd()))->sync();'
+    else
+        cp composer.json composer.local.json
+    fi
+fi
 
 # Include stunnel for SSL termination
 source /opt/froxlor/bin/stunnel.sh

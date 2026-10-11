@@ -28,7 +28,7 @@ set -e
 cd "${APP_DIR:-/var/www/html/froxlor}"
 
 # migrations and lifecycle hooks of the installed packages
-php artisan froxlor:packages:sync --no-interaction || echo "froxlor: package sync failed, starting anyway" >&2
+php artisan packages:sync --no-interaction || echo "froxlor: package sync failed, starting anyway" >&2
 
 QUEUE="$(php -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); echo config("queue.default");' 2>/dev/null || echo database)"
 CONF=/tmp/froxlor-supervisord.conf

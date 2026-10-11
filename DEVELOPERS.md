@@ -149,6 +149,11 @@ services:
       - ../example:/opt/froxlor/packages/example
 ```
 
+`FROXLOR_DEV_PACKAGES` lists the packages to require (comma separated). `php artisan repositories:init` adds the
+path repository for `/opt/froxlor/packages/*` and requires all of them at `dev-main` with one `composer require`; it
+fails with Composer's error when they cannot be installed. A package mounted elsewhere names its directory:
+`froxlor/example::/srv/example`.
+
 ## Test Node (`Dockerfile.node`)
 
 To work on everything that runs *on* a node (node setup, service installation, web/mail/DNS configuration, environments)
@@ -179,10 +184,21 @@ services:
       dockerfile: Dockerfile.node
     restart: unless-stopped
     hostname: node
-    # websites of the test node
+    # services of the test node on the host (see below)
     ports:
       - "${FROXLOR_NODE_HTTP_PORT:-8081}:80"
       - "${FROXLOR_NODE_HTTPS_PORT:-8443}:443"
+      - "${FROXLOR_NODE_SSH_PORT:-2222}:22"
+      - "${FROXLOR_NODE_FTP_PORT:-2121}:21"
+      - "30000-30019:30000-30019"
+      - "${FROXLOR_NODE_SMTP_PORT:-2525}:25"
+      - "${FROXLOR_NODE_SUBMISSION_PORT:-2587}:587"
+      - "${FROXLOR_NODE_SMTPS_PORT:-2465}:465"
+      - "${FROXLOR_NODE_IMAP_PORT:-2143}:143"
+      - "${FROXLOR_NODE_IMAPS_PORT:-2993}:993"
+      - "${FROXLOR_NODE_POP3_PORT:-2110}:110"
+      - "${FROXLOR_NODE_POP3S_PORT:-2995}:995"
+      - "${FROXLOR_NODE_DATABASE_PORT:-3307}:3306"
     # systemd needs its own cgroup tree and tmpfs mounts
     privileged: true
     cgroup: host
@@ -244,10 +260,40 @@ the test of the root-side helper runs on the test node:
 `FROXLOR_JAIL_HELPER_B64=$(base64 -w0 resources/node/reconcile_jail.py) python3 test_jail_filesystem.py -v` (as root,
 `umask 022`).
 
-Websites on the test node are published on port 8081 (HTTPS 8443). Add the domain to `/etc/hosts` of your machine
-(`127.0.0.1 webtest.test`) and open `http://webtest.test:8081/`. Rootless Docker cannot bind ports below 1024; to use
-port 80, allow it once on the host (`sudo sysctl net.ipv4.ip_unprivileged_port_start=80`) and start with
+The services of the test node are published on the host (each port can be changed with its variable):
+
+| Service                     | Host port | Node port | Variable                       |
+|-----------------------------|-----------|-----------|--------------------------------|
+| HTTP / HTTPS                | 8081 / 8443 | 80 / 443 | `FROXLOR_NODE_HTTP_PORT`, `FROXLOR_NODE_HTTPS_PORT` |
+| SSH/SFTP of the environments | 2222     | 22        | `FROXLOR_NODE_SSH_PORT`        |
+| FTP (passive 30000–30019)   | 2121      | 21        | `FROXLOR_NODE_FTP_PORT`        |
+| SMTP / submission / SMTPS   | 2525 / 2587 / 2465 | 25 / 587 / 465 | `FROXLOR_NODE_SMTP_PORT`, `…_SUBMISSION_PORT`, `…_SMTPS_PORT` |
+| IMAP / IMAPS                | 2143 / 2993 | 143 / 993 | `FROXLOR_NODE_IMAP_PORT`, `FROXLOR_NODE_IMAPS_PORT` |
+| POP3 / POP3S                | 2110 / 2995 | 110 / 995 | `FROXLOR_NODE_POP3_PORT`, `FROXLOR_NODE_POP3S_PORT` |
+| MariaDB                     | 3307      | 3306      | `FROXLOR_NODE_DATABASE_PORT`   |
+
+Add the domains to `/etc/hosts` of your machine (`127.0.0.1 webtest.test`) and open `http://webtest.test:8081/`.
+Applications that store their own address (WordPress `siteurl`) redirect to it, keeping only one of the two ports; for
+HTTP and HTTPS side by side let the address follow the request (WordPress: `WP_HOME`/`WP_SITEURL` from `HTTP_HOST` in
+`wp-config.php`, limited to the site's own host names).
+Rootless Docker cannot bind ports below 1024; to use port 80, allow it once on the host
+(`sudo sysctl net.ipv4.ip_unprivileged_port_start=80`) and start with
 `FROXLOR_NODE_HTTP_PORT=80 FROXLOR_NODE_HTTPS_PORT=443 docker compose up -d node`.
+
+What the node needs so that these services work from the host:
+
+- FTP: the passive range is mapped 1:1; set the node setting `ftp.passive_ports` to `30000 30019`. ProFTPD announces
+  the container's address in passive mode: FileZilla replaces it with the server address on its own, curl needs
+  `--ftp-skip-pasv-ip`.
+- Databases: the node setup lets MariaDB listen on all addresses (the panel reaches the node over the network) and
+  creates the administrator froxlor uses (stored under the node's database server). For access from the host, add `%`
+  to the access hosts there (`localhost,%`). Customers are shown `127.0.0.1` as host of a database on their own node:
+  it works for the websites and inside the jail, which has no MariaDB socket.
+- Mail: the node's host name `node` is no FQDN; the node setup asks for the host name of the mail server (or set the
+  node setting `mail.hostname`).
+
+The dev seed assigns the node to "Example Reseller" (may pass it on) and "Example Customer" (plan "Example Plan" of the
+reseller); other tenants get nodes on their page under "Nodes" (or `PUT /api/tenants/{tenant}/node-assignments`).
 
 The test node keeps its state in the volumes `node-etc`, `node-usr`, `node-var`, `node-srv`, `node-root` and
 `node-home` (filled from the image on first start): installed services, environments, mailboxes and databases survive
@@ -304,6 +350,87 @@ docker compose exec -T db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD"' < db
 docker compose exec -e DB_DATABASE=froxlor_testing froxlor php artisan migrate:fresh --seed
 ```
 
+### Usage of froxlor Packages
+
+froxlor's package management (`froxlor/packages`) comes with these Artisan commands:
+
+| Command                             | What it does                                                                                     |
+|-------------------------------------|--------------------------------------------------------------------------------------------------|
+| `packages:install <package>...`     | Runs `composer require` for one or more packages (optionally `vendor/name:^1.0`), then verifies the boot and syncs |
+| `packages:remove <package> [--purge]` | Uninstalls a package (lifecycle hooks, then `composer remove`); `--purge` also deletes its data |
+| `packages:enable <package>`         | Enables a package (`enabling`/`enabled` hooks); refused while a package it requires is disabled |
+| `packages:disable <package>`        | Disables a package (`disabling`/`disabled` hooks); refused while enabled packages depend on it |
+| `packages:update [<package>]`       | Runs `composer update` for one package, or for all of them without an argument, then verifies the boot and syncs |
+| `packages:sync`                     | Runs pending migrations, `core:sync-registries` and the `installing/installed`, `updating/updated` hooks |
+| `packages:verify`                   | Boots the application in a fresh process and reports whether it still starts with the installed packages |
+| `packages:check-updates`            | Compares the installed packages with the marketplace and notifies the root tenants about updates |
+| `repositories:init`                 | Adds the path repository `/opt/froxlor/packages/*` and requires the packages of `FROXLOR_DEV_PACKAGES` |
+
+```shell
+docker compose run froxlor php artisan packages:install froxlor/web froxlor/mail:^1.0
+docker compose run froxlor php artisan packages:remove froxlor/example
+docker compose run froxlor php artisan packages:remove froxlor/example --purge  # also delete its data
+docker compose run froxlor php artisan packages:disable froxlor/example
+docker compose run froxlor php artisan packages:enable froxlor/example
+docker compose run froxlor php artisan packages:update                 # update all packages
+docker compose run froxlor php artisan packages:update froxlor/example # update a single package
+docker compose run froxlor php artisan packages:verify
+docker compose run froxlor php artisan packages:check-updates
+```
+
+`packages:install` and `packages:update` boot the application in a fresh process after Composer (the same check as
+`packages:verify`). If a package breaks the boot, it is disabled automatically (safe mode) and the command reports which
+package and why. `packages:install` resolves all given packages with a single `composer require`, so packages that depend
+on each other (e.g. `froxlor/domain` and `froxlor/web`) can be installed together.
+
+`packages:remove` refuses `froxlor/framework`, `froxlor/core`, `froxlor/ui` and `froxlor/packages`, and any package
+another installed froxlor package still requires (remove the dependants first). The package management (also the
+"Uninstall" page and `DELETE api/packages/{package}`) then:
+
+1. checks with `composer remove --dry-run` that Composer can remove the package, before anything is torn down,
+2. disables the package (`disabling()`/`disabled()`) and calls its `uninstalling(bool $purge)` hook while its code is
+   still loaded (there is no hook after the removal). The feature packages use `NodeUninstall::run()` there: without
+   purge froxlor only stops managing their nodes (the drift check forgets the files, the nodes keep their
+   configuration, a reinstall takes over again); with purge the node role is taken off the nodes and the configuration
+   files froxlor wrote are removed there by the queued core job `RemoveNodeFiles`, followed by a reload: vhosts, PHP-FPM
+   pools, certificates and password files (web), lookup maps, SQL configuration, rspamd settings and DKIM keys (mail;
+   `main.cf`, `master.cf` and `dovecot.conf` stay), zones and the zone list with its include in `named.conf.local`
+   (dns), the ProFTPD configuration and the managed SSH keys (ftp; the sshd configuration stays, it keeps password
+   logins of the environment users off). The lookup database users of mail and FTP are dropped. Installed services
+   and customer data (webspace, maildirs, customer databases, backups) are never touched,
+3. with `--purge` (the "Delete data" toggle in the UI) rolls back the package's migrations (`migrate:reset` on its
+   migration directories, so every `down()` must work), then calls `uninstalled(bool $purge)`, the last moment the
+   package's code runs (symmetric to `installing()` → migrations → `installed()`),
+4. runs `composer remove`,
+5. forgets the package's lifecycle state (a reinstall starts enabled) and, with `--purge`, deletes the settings it owns
+   (`owner_package`), its permissions (with their role assignments) and its resources (with plan limits, usage and
+   reservations).
+
+Without `--purge` the tables, settings, permissions and resources stay, so a reinstall picks them up again. If the
+rollback fails, the package stays installed and disabled (`uninstalled()` is not called). If `composer remove` fails
+after the rollback, `migrate` brings the schema back and the package stays disabled; if only a Composer script failed
+after the package was removed (e.g. `package:discover`), the uninstall is completed and the error reported. Afterwards
+the application is booted once in a fresh process (`packages:verify`); if it no longer starts, that is reported too. A package that safe mode keeps
+from loading gets no hooks; its migrations and settings are purged all the same, its permissions and resources stay.
+`--purge` asks for confirmation on a terminal (`--no-interaction` skips the question).
+
+Run from a terminal, `packages:update` lets a package hook that needs administrator input (`requireCompletion()`) ask
+for it on the command line. Otherwise (and always for `packages:install`) the input is requested in the web UI and the
+package's migrations are held back until then.
+
+`packages:sync` is normally not called by hand: the package management runs it as a subprocess after every Composer
+change (with `--installed=<package>` / `--updated=<package>` for the packages that changed, so their new code is
+autoloadable), and `bin/run.sh` runs it without options on startup to apply pending migrations. Call it yourself after
+changing a mounted package by hand, e.g. after adding a migration:
+
+```shell
+docker compose exec froxlor php artisan packages:sync
+```
+
+`packages:check-updates` runs daily through the scheduler; when everything is up to date again it removes unread
+update notifications.
+
+
 ### Usage of Composer
 
 Sometimes you may wish to use Composer without using froxlor's package management. This can easily be done with the
@@ -312,6 +439,13 @@ following command:
 ```shell
 docker compose run froxlor composer <...>
 ```
+
+The package management never changes the skeleton's `composer.json` (which is under version control). It installs
+packages and adds repositories in `composer.local.json` with the lock `composer.local.lock` (both git-ignored), which
+it rebuilds from `composer.json` before every Composer run, keeping its own additions. The image sets
+`COMPOSER=composer.local.json`, so Composer commands in the container work on the same files; the entrypoint creates
+`composer.local.json` from `composer.json` when it is missing. Changes to the skeleton (scripts, requirements) therefore
+belong in `composer.json`.
 
 ## Test services
 
@@ -340,7 +474,7 @@ docker compose exec node update-ca-certificates
 
 Without a command the image starts `bin/run.sh`: supervisord with Octane (Swoole, port 8000), the queue workers
 (Horizon when `QUEUE_CONNECTION=redis`, otherwise `queue:work` for the `default`, `node-setup` and `environment-jails` queues) and the
-scheduler, each restarted when it ends; `froxlor:packages:sync` runs before. The development compose file overrides the
+scheduler, each restarted when it ends; `packages:sync` runs before. The development compose file overrides the
 command with `composer run serve`. To try the production processes next to the development container:
 
 ```bash

@@ -30,6 +30,9 @@ LABEL org.opencontainers.image.licenses="LGPL-3.0-or-later WITH LicenseRef-froxl
 RUN git config --global --add safe.directory /var/www/html/froxlor
 WORKDIR /var/www/html/froxlor
 
+# composer works on composer.local.json, the package management's copy of composer.json (froxlor/packages)
+ENV COMPOSER=composer.local.json
+
 # Install openssl and stunnel for SSL termination, supervisor for the production processes
 RUN apk add --no-cache openssl stunnel supervisor
 
