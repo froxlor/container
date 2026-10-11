@@ -20,12 +20,18 @@
 # <https://www.gnu.org/licenses/>.
 
 # Production processes of the froxlor container under supervisord, each restarted when it ends:
-# the web server (Octane with Swoole), the queue workers (Horizon with Redis, otherwise queue:work
+# the web server (Caddy in front of php-fpm), the queue workers (Horizon with Redis, otherwise queue:work
 # for the default, the node-setup and the environment-jails queue) and the scheduler. Development uses "composer run serve".
 
 set -e
 
 cd "${APP_DIR:-/var/www/html/froxlor}"
+
+# the 503 the package management answers with while composer runs, left behind when the container
+# was stopped in between (a maintenance mode of "artisan down" is not touched)
+if grep -qs "froxlor/packages" storage/framework/maintenance.php; then
+    rm -f storage/framework/maintenance.php
+fi
 
 # migrations and lifecycle hooks of the installed packages
 php artisan packages:sync --no-interaction || echo "froxlor: package sync failed, starting anyway" >&2
@@ -70,9 +76,8 @@ supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
 serverurl=unix:///tmp/froxlor-supervisor.sock
 
 CONF
-    # a Swoole server left behind by a crashed "octane:start" keeps the port: ended before every start
-    # (asked first, then killed with its workers)
-    program octane "/opt/froxlor/bin/octane.sh"
+    program php-fpm "php-fpm --nodaemonize --allow-to-run-as-root"
+    program caddy "caddy run --config ${CADDYFILE:-/etc/caddy/Caddyfile} --adapter caddyfile"
     if [ "$QUEUE" = "redis" ]; then
         # waits for running jobs on stop (node setups up to 21 minutes, jail jobs up to 31)
         program horizon "php artisan horizon" 1900

@@ -66,7 +66,7 @@ services:
         pid: "host"
         # Use the environment and/or the env_file as you like
         environment:
-            FROXLOR_OCTANE_HTTPS: true
+            FROXLOR_HTTPS: true
         env_file: .env
         # These ports are used for the froxlor ui
         ports:

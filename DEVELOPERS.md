@@ -472,7 +472,8 @@ docker compose exec node update-ca-certificates
 
 ## Production processes
 
-Without a command the image starts `bin/run.sh`: supervisord with Octane (Swoole, port 8000), the queue workers
+Without a command the image starts `bin/run.sh`: supervisord with Caddy in front of php-fpm (port 8000, with
+`FROXLOR_HTTPS=true` also HTTPS on 8443; `bin/caddy.sh`, `config/php-fpm.conf`), the queue workers
 (Horizon when `QUEUE_CONNECTION=redis`, otherwise `queue:work` for the `default`, `node-setup` and `environment-jails` queues) and the
 scheduler, each restarted when it ends; `packages:sync` runs before. The development compose file overrides the
 command with `composer run serve`. To try the production processes next to the development container:

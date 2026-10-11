@@ -18,7 +18,7 @@
 # License along with this library. If not, see
 # <https://www.gnu.org/licenses/>.
 
-FROM hub.froxlor.io/laravel/container:8.5-octane-minimal
+FROM hub.froxlor.io/laravel/container:8.5-fpm-minimal
 
 LABEL maintainer="froxlor Team <team@froxlor.org>"
 LABEL org.opencontainers.image.title="froxlor Container"
@@ -33,8 +33,12 @@ WORKDIR /var/www/html/froxlor
 # composer works on composer.local.json, the package management's copy of composer.json (froxlor/packages)
 ENV COMPOSER=composer.local.json
 
-# Install openssl and stunnel for SSL termination, supervisor for the production processes
-RUN apk add --no-cache openssl stunnel supervisor
+# Install Caddy as web server in front of php-fpm (openssl for its self-signed certificate),
+# supervisor for the production processes
+RUN apk add --no-cache caddy openssl supervisor
+
+# php-fpm pool of the panel
+COPY config/php-fpm.conf /usr/local/etc/php-fpm.d/zz-froxlor.conf
 
 # Copy scripts
 COPY bin/ /opt/froxlor/bin/

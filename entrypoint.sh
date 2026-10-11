@@ -46,7 +46,7 @@ if [ ! -f composer.local.json ]; then
 fi
 
 # Include stunnel for SSL termination
-source /opt/froxlor/bin/stunnel.sh
+source /opt/froxlor/bin/caddy.sh
 
 # Update .env to reflect the docker environment variables
 source /opt/froxlor/bin/env.sh

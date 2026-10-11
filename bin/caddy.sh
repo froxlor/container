@@ -19,16 +19,41 @@
 # License along with this library. If not, see
 # <https://www.gnu.org/licenses/>.
 
+# Web server of the container: Caddy serves public/ and hands PHP to php-fpm (bin/run.sh starts
+# both). Sourced by the entrypoint, writes the Caddyfile.
+
 set -e
 
 SSL_CERT_DIR="${SSL_CERT_DIR:-/opt/froxlor/ssl}"
-SSL_CERT="${SSL_CERT:-$SSL_CERT_DIR/stunnel.pem}"
-SSL_KEY="${SSL_KEY:-$SSL_CERT_DIR/stunnel.pem}"
+SSL_CERT="${SSL_CERT:-$SSL_CERT_DIR/froxlor.pem}"
+SSL_KEY="${SSL_KEY:-$SSL_CERT_DIR/froxlor.pem}"
 SSL_PORT="${SSL_PORT:-8443}"
 HTTP_PORT="${HTTP_PORT:-8000}"
+CADDYFILE="${CADDYFILE:-/etc/caddy/Caddyfile}"
 
-# Enable SSL termination when FROXLOR_OCTANE_HTTPS or FROXLOR_FORCE_HTTPS is true
-if [ "${FROXLOR_OCTANE_HTTPS:-false}" = "true" ] || [ "${FROXLOR_FORCE_HTTPS:-false}" = "true" ]; then
+mkdir -p "$(dirname "$CADDYFILE")"
+
+cat > "$CADDYFILE" <<EOF
+{
+    admin off
+    auto_https off
+}
+
+(froxlor) {
+    root * ${APP_DIR:-/var/www/html/froxlor}/public
+    encode zstd gzip
+    php_fastcgi 127.0.0.1:9000
+    file_server
+}
+
+:${HTTP_PORT} {
+    import froxlor
+}
+EOF
+
+# HTTPS listener when FROXLOR_HTTPS is true (FROXLOR_OCTANE_HTTPS of older compose files and
+# FROXLOR_FORCE_HTTPS switch it on as well)
+if [ "${FROXLOR_HTTPS:-false}" = "true" ] || [ "${FROXLOR_OCTANE_HTTPS:-false}" = "true" ] || [ "${FROXLOR_FORCE_HTTPS:-false}" = "true" ]; then
     # Generate a self-signed certificate if none is provided.
     mkdir -p "$SSL_CERT_DIR"
     if [ ! -f "$SSL_CERT" ] || [ ! -f "$SSL_KEY" ]; then
@@ -44,29 +69,20 @@ if [ "${FROXLOR_OCTANE_HTTPS:-false}" = "true" ] || [ "${FROXLOR_FORCE_HTTPS:-fa
     fi
 
     chmod 600 "$SSL_KEY"
-    chmod 644 "$SSL_CERT"
 
-    # stunnel configuration.
-    STUNNEL_CONF="/etc/stunnel/froxlor.conf"
-    mkdir -p /etc/stunnel
+    cat >> "$CADDYFILE" <<EOF
 
-    cat > "$STUNNEL_CONF" <<EOF
-; stunnel configuration for froxlor SSL termination
-foreground = no
-pid = /var/run/stunnel-froxlor.pid
-
-[froxlor-https]
-accept  = 0.0.0.0:${SSL_PORT}
-connect = 127.0.0.1:${HTTP_PORT}
-cert    = ${SSL_CERT}
-key     = ${SSL_KEY}
+:${SSL_PORT} {
+    tls ${SSL_CERT} ${SSL_KEY}
+    import froxlor
+}
 EOF
 
-    echo "Starting stunnel (HTTPS on port $SSL_PORT -> HTTP on port $HTTP_PORT)..."
-    stunnel "$STUNNEL_CONF"
-
-    export FROXLOR_FORCE_HTTPS=true
+    echo "HTTPS on port $SSL_PORT, HTTP on port $HTTP_PORT."
 else
-    echo "SSL termination disabled; serving froxlor over HTTP on port $HTTP_PORT."
-    export FROXLOR_FORCE_HTTPS=false
+    echo "HTTPS disabled; serving froxlor over HTTP on port $HTTP_PORT."
 fi
+
+# The web server tells PHP the scheme of each request. https is only forced when asked for
+# (TLS ends at a reverse proxy in front of the container).
+export FROXLOR_FORCE_HTTPS="${FROXLOR_FORCE_HTTPS:-false}"
