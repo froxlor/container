@@ -282,7 +282,7 @@ Rootless Docker cannot bind ports below 1024; to use port 80, allow it once on t
 
 What the node needs so that these services work from the host:
 
-- FTP: the passive range is mapped 1:1; set the node setting `ftp.passive_ports` to `30000 30019`. ProFTPD announces
+- FTP: the passive range is mapped 1:1; set the node setting `access.passive_ports` to `30000 30019`. ProFTPD announces
   the container's address in passive mode: FileZilla replaces it with the server address on its own, curl needs
   `--ftp-skip-pasv-ip`.
 - Databases: the node setup lets MariaDB listen on all addresses (the panel reaches the node over the network) and

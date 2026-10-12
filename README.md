@@ -123,9 +123,9 @@ Without these privileges, run `php artisan mail:node-access <node>` or `php arti
 and execute the printed statements as database administrator.
 
 The nodes connect to the database over the network: the database has to be reachable from them
-(node settings `mail.lookup_db_host`/`ftp.lookup_db_host` if they see it under another address). For
-remote nodes, enable TLS for these connections (`mail.lookup_db_tls`, `ftp.lookup_db_tls`) and restrict the host the lookup
-users may connect from (`mail.lookup_user_host`, `ftp.lookup_user_host`).
+(node settings `mail.lookup_db_host`/`access.lookup_db_host` if they see it under another address). For
+remote nodes, enable TLS for these connections (`mail.lookup_db_tls`, `access.lookup_db_tls`) and restrict the host the lookup
+users may connect from (`mail.lookup_user_host`, `access.lookup_user_host`).
 
 ## Running Without Privileged Host Access
 
