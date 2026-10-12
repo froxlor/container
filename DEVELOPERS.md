@@ -47,7 +47,8 @@ services:
                 condition: service_started
         ports:
             - "8000:8000"
-        # Use the environment and/or the env_file as you like
+        # FROXLOR_* end up in ../froxlor/.env without the prefix (bin/env.sh); no env_file of that
+        # .env: compose would read it before bin/env.sh rewrites it, and its old values would win
         environment:
             FROXLOR_DB_CONNECTION: mariadb
             FROXLOR_DB_HOST: db
@@ -55,9 +56,6 @@ services:
             FROXLOR_DB_DATABASE: froxlor
             FROXLOR_DB_USERNAME: froxlor
             FROXLOR_DB_PASSWORD: CHANGEM3
-        env_file:
-            -   path: ../froxlor/.env
-                required: false
         volumes:
             - ../froxlor:/var/www/html/froxlor
             - ../framework:/opt/froxlor/packages/framework
