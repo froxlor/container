@@ -253,10 +253,12 @@ output appears in `docker compose logs froxlor`. What the setup did on the node 
 `/var/lib/froxlor/node-setup/<run>/` (`status`, `phase`).
 
 Environments are placed on a node and their jails reconciled through the queue `environment-jails` (process
-`jails`). Packages put programs, files or jail users into the jails (`core/docs/environment-jails.md`);
-the test of the root-side helper runs on the test node:
-`FROXLOR_JAIL_HELPER_B64=$(base64 -w0 resources/node/reconcile_jail.py) python3 test_jail_filesystem.py -v` (as root,
-`umask 022`).
+`jails`). The jails are built with bubblewrap for every session (SSH and the commands of the packages), nothing is
+copied or mounted on the node; packages and the tools unlocked per environment (System → Tools) put programs, files
+or jail users into them (`core/docs/environment-jails.md`). The test of the helper and the starter runs on the test
+node, from `core/` (as root, `umask 022`):
+`FROXLOR_JAIL_HELPER_B64=$(base64 -w0 resources/node/reconcile_jail.py) FROXLOR_JAIL_STARTER_B64=$(base64 -w0 resources/node/froxlor-jail) python3 tests/Feature/Environment/test_jail_filesystem.py -v`.
+The programs of a tool have to be installed on the node first (e.g. `apt-get install nodejs`).
 
 The services of the test node are published on the host (each port can be changed with its variable):
 
@@ -295,8 +297,7 @@ reseller); other tenants get nodes on their page under "Nodes" (or `PUT /api/ten
 
 The test node keeps its state in the volumes `node-etc`, `node-usr`, `node-var`, `node-srv`, `node-root` and
 `node-home` (filled from the image on first start): installed services, environments, mailboxes and databases survive
-restarts and recreating the container. The jail mounts of the environments are kept in its `/etc/fstab`. Changes to
-`Dockerfile.node` only reach a node with fresh volumes.
+restarts and recreating the container. Changes to `Dockerfile.node` only reach a node with fresh volumes.
 
 Start from a clean system again (all installed services, environments and mailboxes on the node are gone; froxlor
 still has the node as set up, run *Run setup again* on the node page or reseed):

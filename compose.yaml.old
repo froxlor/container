@@ -1,0 +1,77 @@
+services:
+  froxlor:
+    image: hub.froxlor.io/froxlor/froxlor:latest
+    #build: .
+    restart: unless-stopped
+    privileged: true
+    pid: "host"
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ../froxlor/.env
+        required: false
+    volumes:
+      - ../froxlor:/var/www/html/froxlor
+      - ../framework:/var/www/html/framework
+      - ../adapter-remote:/var/www/html/adapter-remote
+      - ../migration:/var/www/html/migration
+    networks:
+      - internal
+  node:
+    build:
+      dockerfile: Dockerfile.testbox
+    cap_add:
+      - MKNOD
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    networks:
+      - internal
+  db:
+    image: mariadb:latest
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: xtyhAMc245zW
+      MYSQL_DATABASE: froxlor
+      MYSQL_USER: froxlor
+      MYSQL_PASSWORD: 2S1A5aMHFA8y
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./database:/var/lib/mysql
+    networks:
+      - internal
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    volumes:
+      - ./redis/:/data
+    networks:
+      - internal
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    networks:
+      - internal
+#  caddy:
+#    image: caddy
+#    container_name: caddy
+#    restart: unless-stopped
+#    ports:
+#      - 8088:80
+#      - 4443:443
+#    volumes:
+#      - ./caddy/data:/data
+#      - ./caddy/config:/config
+#      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+#    networks:
+#      - internal
+
+networks:
+  internal:
+    driver: bridge
