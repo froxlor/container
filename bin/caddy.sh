@@ -33,10 +33,36 @@ CADDYFILE="${CADDYFILE:-/etc/caddy/Caddyfile}"
 
 mkdir -p "$(dirname "$CADDYFILE")"
 
+# Reverse proxies in front of the container (FROXLOR_TRUSTED_PROXIES: IPs or CIDR ranges, comma or
+# space separated, * for every address). Caddy keeps their X-Forwarded-* headers, from every other
+# client it replaces them; froxlor trusts the same proxies (TRUSTED_PROXIES in .env, bin/env.sh).
+TRUSTED_PROXIES_CADDY=""
+set -f
+for proxy in $(printf '%s' "${FROXLOR_TRUSTED_PROXIES:-}" | tr ',' ' '); do
+    case "$proxy" in
+        '*') proxy="0.0.0.0/0 ::/0" ;;
+        *[!0-9A-Fa-f.:/]*)
+            echo "FROXLOR_TRUSTED_PROXIES: '$proxy' is no IP address or CIDR range" >&2
+            exit 1
+            ;;
+    esac
+    TRUSTED_PROXIES_CADDY="${TRUSTED_PROXIES_CADDY:+$TRUSTED_PROXIES_CADDY }$proxy"
+done
+set +f
+
+SERVERS_OPTIONS=""
+if [ -n "$TRUSTED_PROXIES_CADDY" ]; then
+    SERVERS_OPTIONS="
+    servers {
+        trusted_proxies static $TRUSTED_PROXIES_CADDY
+    }"
+    echo "Trusting the X-Forwarded-* headers of: $TRUSTED_PROXIES_CADDY"
+fi
+
 cat > "$CADDYFILE" <<EOF
 {
     admin off
-    auto_https off
+    auto_https off${SERVERS_OPTIONS}
 }
 
 (froxlor) {
@@ -83,6 +109,6 @@ else
     echo "HTTPS disabled; serving froxlor over HTTP on port $HTTP_PORT."
 fi
 
-# The web server tells PHP the scheme of each request. https is only forced when asked for
-# (TLS ends at a reverse proxy in front of the container).
+# The web server tells PHP the scheme of each request; behind a reverse proxy that ends TLS, the
+# proxy tells it with X-Forwarded-Proto (FROXLOR_TRUSTED_PROXIES). https is only forced when asked for.
 export FROXLOR_FORCE_HTTPS="${FROXLOR_FORCE_HTTPS:-false}"

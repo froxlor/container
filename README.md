@@ -107,6 +107,47 @@ Open froxlor in your browser:
 https://<your-server-ip>:8443
 ```
 
+## Behind a Reverse Proxy
+
+When a reverse proxy in front of the container ends TLS (e.g. Apache on another server), name its
+address in `FROXLOR_TRUSTED_PROXIES` (IPs or CIDR ranges, comma separated, `*` for every address).
+Only from these addresses Caddy in the container and froxlor accept the `X-Forwarded-For`,
+`X-Forwarded-Host`, `X-Forwarded-Port` and `X-Forwarded-Proto` headers (client address, host and
+`https`); from every other client they are ignored. `Forwarded` and `X-Forwarded-Prefix` are never
+used.
+
+```yaml
+        environment:
+            FROXLOR_TRUSTED_PROXIES: 192.0.2.10
+            FROXLOR_APP_URL: https://panel.example.com
+        ports:
+            - "8000:8000"
+```
+
+Name the address the container sees as the source of the proxy's requests. Docker usually keeps the
+source address of requests to published ports; with Docker's userland proxy (e.g. for IPv6) it is
+the address of the Docker bridge instead (`172.17.0.1` by default). `FROXLOR_HTTPS` is not needed
+for this.
+
+Apache as the proxy (modules `proxy`, `proxy_http`, `headers`, `ssl`):
+
+```apache
+<VirtualHost *:443>
+    ServerName panel.example.com
+    SSLEngine on
+    SSLCertificateFile /etc/ssl/certs/panel.example.com.pem
+    SSLCertificateKeyFile /etc/ssl/private/panel.example.com.key
+
+    ProxyPreserveHost On
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port "443"
+    ProxyPass / http://froxlor.internal:8000/
+    ProxyPassReverse / http://froxlor.internal:8000/
+</VirtualHost>
+```
+
+`mod_proxy` adds `X-Forwarded-For` and `X-Forwarded-Host` itself.
+
 ## Database Privileges
 
 Mail and FTP nodes look up domains, mailboxes and FTP accounts directly in the froxlor database (like
@@ -154,7 +195,8 @@ For production deployments, consider the following recommendations:
   Store froxlor data outside the container to prevent data loss during container recreation.
 
 * **Use a reverse proxy**
-  Place froxlor behind a reverse proxy such as Caddy, Nginx, or Traefik.
+  Place froxlor behind a reverse proxy such as Apache, Caddy, Nginx, or Traefik and trust only its address
+  (`FROXLOR_TRUSTED_PROXIES`, see "Behind a Reverse Proxy").
 
 * **Enable HTTPS**
   Secure all browser-to-panel communication with TLS.
